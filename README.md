@@ -32,3 +32,92 @@ final CacheControl.Builder builder = new CacheControl.Builder();
 
 
    如果返回的数据量比较大，就不要直接用response.body().string()，应该用 response.body().charStream()
+
+    加载进度
+   // 监听进度的接口
+   interface ProgressListener {
+       void update(long bytesRead, long contentLength, boolean done);
+   // 处理进度的自定义响应体
+   static class ProgressResponseBody extends ResponseBody {
+
+         private final ResponseBody responseBody;
+         private final ProgressListener progressListener;
+         private BufferedSource bufferedSource;
+
+         public ProgressResponseBody(ResponseBody responseBody, ProgressListener progressListener) {
+             this.responseBody = responseBody;
+             this.progressListener = progressListener;
+         }
+
+
+         @Override
+         public MediaType contentType() {
+             return responseBody.contentType();
+         }
+
+         @Override
+         public long contentLength() {
+             return responseBody.contentLength();
+         }
+
+         @Override
+         public BufferedSource source() {
+
+             if (bufferedSource == null) {
+                 bufferedSource = Okio.buffer(source(responseBody.source()));
+             }
+
+             return bufferedSource;
+         }
+
+         private Source source(Source source) {
+
+             return new ForwardingSource(source) {
+
+                 long totalBytesRead = 0L;
+
+                 @Override
+                 public long read(Buffer sink, long byteCount) throws IOException {
+                     long bytesRead = super.read(sink, byteCount);
+                     totalBytesRead += bytesRead != -1 ? bytesRead : 0;
+                     progressListener.update(totalBytesRead, responseBody.contentLength(), bytesRead == -1);
+                     return bytesRead;
+                 }
+             };
+         }
+     }
+   }
+
+   // 为客户端实例添加网络拦截器，并相应回调。
+   @Test
+   public void testProgress() throws IOException {
+       Request request = new Request.Builder()
+               .url("https://publicobject.com/helloworld.txt")
+               .build();
+
+       final ProgressListener progressListener = new ProgressListener() {
+
+           @Override
+           public void update(long bytesRead, long contentLength, boolean done) {
+               System.out.println("bytesRead = [" + bytesRead + "], contentLength = [" + contentLength + "], done = [" + done + "]");
+               System.out.format("%d%% done\n", (100 * bytesRead) / contentLength);
+           }
+       };
+
+       yOkHttpClient = new OkHttpClient.Builder()
+               .addNetworkInterceptor(new Interceptor() {
+                   @Override
+                   public Response intercept(Chain chain) throws IOException {
+                       Response originalResponse = chain.proceed(chain.request());
+                       return originalResponse.newBuilder()
+                               .body(new ProgressResponseBody(originalResponse.body(), progressListener))
+                               .build();
+                   }
+               })
+               .build();
+
+       Response response = yOkHttpClient.newCall(request).execute();
+       if (!response.isSuccessful()) throw new IOException("Unexpected code " + response);
+
+       System.out.println(response.body().string());
+   }
