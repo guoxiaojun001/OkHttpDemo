@@ -25,6 +25,12 @@
         android:text="post请求" />
 
     <Button
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:onClick="downLoadFile"
+        android:text="文件下载" />
+
+    <Button
         android:id="@+id/cache"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
