@@ -31,6 +31,13 @@
         android:onClick="postData"
         android:text="带有缓存" />
 
+    <Button
+        android:id="@+id/more"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:onClick="postData"
+        android:text="更多用法" />
+
     <TextView
         android:id="@+id/result"
         android:layout_width="wrap_content"

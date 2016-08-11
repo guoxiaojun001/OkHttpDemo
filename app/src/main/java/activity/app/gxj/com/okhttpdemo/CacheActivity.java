@@ -26,7 +26,8 @@ import okhttp3.Interceptor;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
-import okhttp3.logging.HttpLoggingInterceptor;
+//import okhttp3.logging.HttpLoggingInterceptor;
+
 
 /**
  * Created by gxj on 2016/8/9.
@@ -34,10 +35,15 @@ import okhttp3.logging.HttpLoggingInterceptor;
 public class CacheActivity extends AppCompatActivity {
 
     private final static String TAG = "CacheActivity1";
-    String url = "http://publicobject.com/helloworld.txt";
+//    String url = "http://publicobject.com/helloworld.txt";
+    String url = "https://github.com/square/okhttp";
 
     TextView result;
     Button buttonPanel;
+
+    OkHttpClient okHttpClient;
+
+    CacheControl my_cache;
 
     Handler handler = new Handler(){
         @Override
@@ -46,8 +52,6 @@ public class CacheActivity extends AppCompatActivity {
             Log.d(TAG, "handleMessage" + data);
             switch (msg.what){
                 case 0:
-                    result.setText("");
-                    Toast.makeText(CacheActivity.this,data,Toast.LENGTH_SHORT).show();
                     result.setText(data);
                     break;
 
@@ -57,25 +61,19 @@ public class CacheActivity extends AppCompatActivity {
         }
     };
 
-    //修改系统原有的 设置时间
-    CacheControl FORCE_CACHE_MY = new CacheControl.Builder()
-            .onlyIfCached()
-            .maxStale(60, TimeUnit.SECONDS)
-            .build();
 
     /***
      * 拦截器，保存缓存的方法
      * 2016年7月29日11:22:47
      */
     Interceptor interceptor = new Interceptor() {
-
         @Override
         public Response intercept(Chain chain) throws IOException {
             Request request = chain.request();
 
             if (isNetworkAvailable()) {
                 Response response = chain.proceed(request);
-                int maxAge = 60; // 在线缓存在1分钟内可读取
+                int maxAge = 6; // 在线缓存在1分钟内可读取
                 String cacheControl = request.cacheControl().toString();
                 Log.d(TAG, "在线缓存在1分钟内可读取" + cacheControl);
                 return response.newBuilder()
@@ -86,16 +84,15 @@ public class CacheActivity extends AppCompatActivity {
             } else {
                 Log.d(TAG, "离线时缓存时间设置");
                 request = request.newBuilder()
-                        //.cacheControl(FORCE_CACHE_MY)//此处设置了7秒---修改了系统方法
                         .cacheControl(CacheControl.FORCE_CACHE)//或者直接用系统的
                         .build();
 
                 Response response = chain.proceed(request);
                 //下面注释的部分设置也没有效果，因为在上面已经设置了
                 return response.newBuilder()
-//                        .removeHeader("Pragma")
-//                        .removeHeader("Cache-Control")
-//                        .header("Cache-Control", "public, only-if-cached, max-stale=50")
+                        //.removeHeader("Pragma")
+                        //.removeHeader("Cache-Control")
+                        //.header("Cache-Control", "public, only-if-cached, max-stale=50")
                         .build();
             }
         }
@@ -109,10 +106,18 @@ public class CacheActivity extends AppCompatActivity {
         result = (TextView) findViewById(R.id.result);
         buttonPanel = (Button) findViewById(R.id.buttonPanel);
 
+        CacheControl.Builder builder =
+                new CacheControl.Builder().
+                        maxAge(6, TimeUnit.SECONDS).//这个是控制缓存的最大生命时间
+                        maxStale(6,TimeUnit.SECONDS);//这个是控制缓存的过时时间
+
+        my_cache = builder.build();
+
         buttonPanel.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                initGet();
+                result.setText("正在请求...");
+                initRequest();
             }
         });
     }
@@ -120,27 +125,28 @@ public class CacheActivity extends AppCompatActivity {
     /***
      * 获取服务器数据
      */
-    private void initGet() {
-        //设置缓存
-        File httpCacheDirectory = new File(CacheActivity.this.getCacheDir(), "okthhpqq");
-        Cache cache = null;
-        try {
-            cache = new Cache(httpCacheDirectory, 10 * 1024 * 1024);
-        } catch (Exception e) {
-            Log.e("OKHttp", "Could not create http cache", e);
-        }
-        HttpLoggingInterceptor httpLoggingInterceptor = new HttpLoggingInterceptor();
-        httpLoggingInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
+    private void initRequest() {
+        //设置缓存 /data/data/包名下
+        //File cacheDirectory = new File(CacheActivity.this.getCacheDir(), "okthhpqq");
+        //设置到sd卡里面
+        File cacheDirectory = new File(getExternalCacheDir(), "okthhpqq");
+        Log.i(TAG, "cacheDirectory == " + cacheDirectory.getAbsolutePath());
+        Cache cache = new Cache(cacheDirectory, 10 * 1024 * 1024);
 
-        OkHttpClient okHttpClient = new OkHttpClient.Builder()
-                .cache(cache)
+//        HttpLoggingInterceptor httpLoggingInterceptor = new HttpLoggingInterceptor();
+//        httpLoggingInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY);
+
+        okHttpClient = new OkHttpClient.Builder()
+                .connectTimeout(20, TimeUnit.SECONDS)//请求超时时间
+                .cache(cache)//设置缓存
                 .addInterceptor(interceptor)
                 .addNetworkInterceptor(interceptor)
-                .addInterceptor(httpLoggingInterceptor)
+                //.addInterceptor(httpLoggingInterceptor)
                 .build();
 
         Request request = new Request.Builder()
                 .url(url)
+                .cacheControl(my_cache)
                 .build();
 
         okHttpClient.newCall(request).enqueue(new Callback() {

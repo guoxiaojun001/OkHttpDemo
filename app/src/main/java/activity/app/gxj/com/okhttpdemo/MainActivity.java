@@ -10,24 +10,25 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 
-import com.squareup.okhttp.Callback;
-import com.squareup.okhttp.FormEncodingBuilder;
-import com.squareup.okhttp.OkHttpClient;
-import com.squareup.okhttp.Request;
-import com.squareup.okhttp.RequestBody;
-import com.squareup.okhttp.Response;
 
 import java.io.IOException;
 import java.net.CookieManager;
 import java.net.CookiePolicy;
 import java.util.concurrent.TimeUnit;
 
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+
 public class MainActivity extends AppCompatActivity {
 
     String url = "http://publicobject.com/helloworld.txt";
     private final OkHttpClient client = new OkHttpClient();
 
-    Button cache;
+    Button cache, more;
     TextView result;
     String data;
 
@@ -50,15 +51,10 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        //设置cookies 超时时间等
-        client.setCookieHandler(
-                new CookieManager(null, CookiePolicy.ACCEPT_ORIGINAL_SERVER));
-        client.setConnectTimeout(15000, TimeUnit.SECONDS);
-        client.setReadTimeout(15000, TimeUnit.SECONDS);
-        client.setWriteTimeout(15000, TimeUnit.SECONDS);
 
         result = (TextView) findViewById(R.id.result);
         cache = (Button) findViewById(R.id.cache);
+        more = (Button) findViewById(R.id.more);
 
         cache.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -66,25 +62,31 @@ public class MainActivity extends AppCompatActivity {
                 startActivity(new Intent(MainActivity.this,CacheActivity.class));
             }
         });
+
+        more.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startActivity(new Intent(MainActivity.this,OkHttpAdvancedActivity.class));
+            }
+        });
     }
 
 
     //一般okhttp异步请求 带回调监听
     public void request(View view){
+        result.setText("正在请求...");
         Request request = new Request.Builder()
                 .url(url)
                 .build();
-
         client.newCall(request).enqueue(new Callback() {
             @Override
-            public void onFailure(Request request, IOException e) {
+            public void onFailure(Call call, IOException e) {
                 Log.d("OKHTTPRE","onFailure = " + e.getMessage());
             }
 
             @Override
-            public void onResponse(Response response) throws IOException {
-                //NOT UI Thread 在子线程执行
-                Log.d("OKHTTPRE","code = " + response.code());
+            public void onResponse(Call call, Response response) throws IOException {
+                //NOT UI Thread,刷新ui需要handler发送消息到主线程执行
                 if(response.isSuccessful()){
                     data = response.body().string();
                     Log.d("OKHTTPRE","body = " + data);
@@ -92,15 +94,17 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         });
+
     }
 
     //直接execute 会在主线程执行，所以需要创建线程来执行
     public void execute(View view) throws IOException {
+        result.setText("正在请求...");
         new Thread(){
             @Override
             public void run() {
                 Request request = new Request.Builder()
-                        .url("http://publicobject.com/helloworld.txt")
+                        .url(url)
                         .build();
                 Response response = null;
 
@@ -121,46 +125,44 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    /**
-     * Request request = new Request.Builder()
-     .url("https://api.github.com/repos/square/okhttp/issues")
-     .header("User-Agent", "OkHttp Headers.java")
-     .addHeader("Accept", "application/json; q=0.5")
-     .addHeader("Accept", "application/vnd.github.v3+json")
-     .build();
-     */
+    public void postReqest(View view){
+
+    }
+
+
+
     public void postData(View view){
-        RequestBody formBody = new FormEncodingBuilder()
-                .add("platform", "android")
-                .add("name", "bug")
-                .add("subject", "XXXXXXXXXXXXXXX")
-                .build();
-
-        final Request request = new Request.Builder()
-                .url(url)
-                .post(formBody)
-                .build();
-
-
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    Response response = client.newCall(request).execute();
-                    if (response.isSuccessful()) {
-                        data = response.body().string();
-                        Log.d("OKHTTPRE","body = " + data);
-                        handler.sendMessage(handler.obtainMessage(0,data));
-                    } else {
-                        throw new IOException("Unexpected code " + response);
-                    }
-
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        }).start();
-
+//        result.setText("正在请求...");
+//        RequestBody formBody = new FormEncodingBuilder()
+//                .add("platform", "android")
+//                .add("name", "bug")
+//                .add("subject", "XXXXXXXXXXXXXXX")
+//                .build();
+//
+//        final Request request = new Request.Builder()
+//                .url(url)
+//                .post(formBody)
+//                .build();
+//
+//
+//        new Thread(new Runnable() {
+//            @Override
+//            public void run() {
+//                try {
+//                    Response response = client.newCall(request).execute();
+//                    if (response.isSuccessful()) {
+//                        data = response.body().string();
+//                        Log.d("OKHTTPRE","body = " + data);
+//                        handler.sendMessage(handler.obtainMessage(0,data));
+//                    } else {
+//                        throw new IOException("Unexpected code " + response);
+//                    }
+//
+//                } catch (IOException e) {
+//                    e.printStackTrace();
+//                }
+//            }
+//        }).start();
 
     }
 
